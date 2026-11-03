@@ -1,0 +1,140 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Aldes VMC (locale)",
+        "description": "Indirizzo dell'app Aldes Bridge (di saniho) che riceve i dati della AldesConnect Box.",
+        "data": {
+          "host": "Indirizzo del bridge",
+          "port": "Porta"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile collegarsi al bridge.",
+      "invalid_response": "Risposta del bridge non valida."
+    },
+    "abort": {
+      "already_configured": "Questa VMC è già configurata."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opzioni",
+        "data": {
+          "scan_interval": "Intervallo di aggiornamento (s)",
+          "boost_minutes": "Durata del Boost (minuti)",
+          "stale_minutes": "Dati obsoleti dopo (minuti)"
+        },
+        "data_description": {
+          "scan_interval": "La Box invia dati nuovi circa ogni 10 minuti.",
+          "boost_minutes": "Poi la VMC torna a Quotidiano.",
+          "stale_minutes": "Oltre questo tempo il sensore di connessione segnala dati obsoleti."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "temperatura_esterna": {
+        "name": "Temperatura esterna"
+      },
+      "temperatura_estratta": {
+        "name": "Temperatura estratta"
+      },
+      "temperatura_reimmessa": {
+        "name": "Temperatura aria reimmessa"
+      },
+      "portata_immissione": {
+        "name": "Portata immissione"
+      },
+      "portata_estrazione": {
+        "name": "Portata estrazione"
+      },
+      "giri_ventilatore_immissione": {
+        "name": "Giri ventilatore immissione"
+      },
+      "giri_ventilatore_estrazione": {
+        "name": "Giri ventilatore estrazione"
+      },
+      "velocita_impostata": {
+        "name": "Velocità impostata"
+      },
+      "contatore_filtri": {
+        "name": "Contatore filtri"
+      },
+      "indicatore_depressione": {
+        "name": "Indicatore depressione"
+      },
+      "modalita_attuale": {
+        "name": "Modalità attuale"
+      },
+      "ultimo_dato": {
+        "name": "Ultimo dato"
+      },
+      "fine_boost": {
+        "name": "Fine Boost"
+      },
+      "dtb_ind": {
+        "name": "Indicatore DTB"
+      },
+      "echange_pwr": {
+        "name": "Potenza scambiatore"
+      },
+      "cve_csn": {
+        "name": "Consegna CVE"
+      },
+      "vi_csn": {
+        "name": "Consegna immissione"
+      },
+      "tte_csn": {
+        "name": "Consegna TTE"
+      },
+      "co2": {
+        "name": "CO₂"
+      },
+      "pm25": {
+        "name": "PM2,5"
+      },
+      "voc": {
+        "name": "VOC"
+      }
+    },
+    "binary_sensor": {
+      "connessione": {
+        "name": "Connessione"
+      }
+    },
+    "select": {
+      "modalita": {
+        "name": "Modalità"
+      }
+    },
+    "button": {
+      "aggiorna": {
+        "name": "Aggiorna ora"
+      }
+    }
+  },
+  "services": {
+    "send_command": {
+      "name": "Invia comando",
+      "description": "Invia un comando avanzato alla Box tramite il bridge (solo per prove). Non usare per Vacanza.",
+      "fields": {
+        "method": {
+          "name": "method",
+          "description": "Nome del metodo, per esempio changeMode."
+        },
+        "params": {
+          "name": "params",
+          "description": "Elenco dei parametri, per esempio [\"V\"]."
+        },
+        "config_entry_id": {
+          "name": "config_entry_id",
+          "description": "ID della configurazione (facoltativo)."
+        }
+      }
+    }
+  }
+}

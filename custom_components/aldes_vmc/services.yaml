@@ -1,0 +1,16 @@
+send_command:
+  fields:
+    method:
+      required: true
+      example: changeMode
+      selector:
+        text:
+    params:
+      required: false
+      example: '["V"]'
+      selector:
+        object:
+    config_entry_id:
+      required: false
+      selector:
+        text:

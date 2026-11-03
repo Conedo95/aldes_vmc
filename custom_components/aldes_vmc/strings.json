@@ -1,0 +1,140 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Aldes VMC (locale)",
+        "description": "Address of the Aldes Bridge app (by saniho) that receives the AldesConnect Box data.",
+        "data": {
+          "host": "Bridge address",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the bridge.",
+      "invalid_response": "Invalid response from the bridge."
+    },
+    "abort": {
+      "already_configured": "This VMC is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "scan_interval": "Update interval (s)",
+          "boost_minutes": "Boost duration (minutes)",
+          "stale_minutes": "Data considered stale after (minutes)"
+        },
+        "data_description": {
+          "scan_interval": "The Box sends new data about every 10 minutes.",
+          "boost_minutes": "After that the VMC goes back to Daily.",
+          "stale_minutes": "After this time the connection sensor reports stale data."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "temperatura_esterna": {
+        "name": "Outdoor temperature"
+      },
+      "temperatura_estratta": {
+        "name": "Extract air temperature"
+      },
+      "temperatura_reimmessa": {
+        "name": "Supply (re-injected) air temperature"
+      },
+      "portata_immissione": {
+        "name": "Supply flow"
+      },
+      "portata_estrazione": {
+        "name": "Extract flow"
+      },
+      "giri_ventilatore_immissione": {
+        "name": "Supply fan speed"
+      },
+      "giri_ventilatore_estrazione": {
+        "name": "Extract fan speed"
+      },
+      "velocita_impostata": {
+        "name": "Set speed"
+      },
+      "contatore_filtri": {
+        "name": "Filter counter"
+      },
+      "indicatore_depressione": {
+        "name": "Pressure drop indicator"
+      },
+      "modalita_attuale": {
+        "name": "Current mode"
+      },
+      "ultimo_dato": {
+        "name": "Last data"
+      },
+      "fine_boost": {
+        "name": "Boost end"
+      },
+      "dtb_ind": {
+        "name": "DTB indicator"
+      },
+      "echange_pwr": {
+        "name": "Exchanger power"
+      },
+      "cve_csn": {
+        "name": "CVE setpoint"
+      },
+      "vi_csn": {
+        "name": "Supply setpoint"
+      },
+      "tte_csn": {
+        "name": "TTE setpoint"
+      },
+      "co2": {
+        "name": "CO₂"
+      },
+      "pm25": {
+        "name": "PM2.5"
+      },
+      "voc": {
+        "name": "VOC"
+      }
+    },
+    "binary_sensor": {
+      "connessione": {
+        "name": "Connection"
+      }
+    },
+    "select": {
+      "modalita": {
+        "name": "Mode"
+      }
+    },
+    "button": {
+      "aggiorna": {
+        "name": "Refresh now"
+      }
+    }
+  },
+  "services": {
+    "send_command": {
+      "name": "Send command",
+      "description": "Send an advanced command to the Box through the bridge (testing only). Do not use for Holiday.",
+      "fields": {
+        "method": {
+          "name": "method",
+          "description": "Method name, e.g. changeMode."
+        },
+        "params": {
+          "name": "params",
+          "description": "Parameter list, e.g. [\"V\"]."
+        },
+        "config_entry_id": {
+          "name": "config_entry_id",
+          "description": "Config entry ID (optional)."
+        }
+      }
+    }
+  }
+}
