@@ -28,6 +28,14 @@ class AldesBridgeResponseError(AldesBridgeError):
     """Risposta del bridge non valida."""
 
 
+class AldesBoxNotConnectedError(AldesBridgeResponseError):
+    """Il bridge rifiuta il comando perche' la Box non e' collegata (non viene messo in coda)."""
+
+
+def _is_box_not_connected(text: Any) -> bool:
+    return "aucune box" in str(text).lower()
+
+
 @dataclass
 class BridgeState:
     """Ultimo payload noto inviato dalla Box."""
@@ -69,6 +77,9 @@ class AldesBridgeClient:
                 method, f"{self._base}{path}", timeout=REQUEST_TIMEOUT, **kwargs
             ) as resp:
                 if resp.status != 200:
+                    body = await resp.text()
+                    if _is_box_not_connected(body):
+                        raise AldesBoxNotConnectedError(body[:200])
                     raise AldesBridgeResponseError(f"HTTP {resp.status} su {path}")
                 return await resp.json(content_type=None)
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
@@ -113,6 +124,35 @@ class AldesBridgeClient:
                 best = BridgeState(payload, ts)
         return best
 
+    async def get_ff_history(
+        self, page_size: int, max_pages: int
+    ) -> list[tuple[float, float]]:
+        """Serie (timestamp, ff_cpt) dallo storico, dal piu' recente al meno recente."""
+        rows: dict[float, float] = {}
+        offset = 0
+        for _ in range(max_pages):
+            data = await self._request(
+                "GET",
+                "/api/history/search",
+                params={"text": "current_mode", "limit": page_size, "offset": offset},
+            )
+            messages = (data or {}).get("messages", [])
+            if not messages:
+                break
+            for msg in messages:
+                payload = _parse_payload(msg.get("payload"))
+                if payload is None or "outside_tpt" not in payload:
+                    continue
+                ff = payload.get("ff_cpt")
+                ts = payload.get("_upd_at") or msg.get("ts")
+                if not isinstance(ff, (int, float)) or ts is None:
+                    continue
+                rows[round(float(ts), 0)] = float(ff)
+            offset += len(messages)
+            if offset >= int((data or {}).get("total", 0)):
+                break
+        return sorted(rows.items(), reverse=True)
+
     async def _state_from_logs(self) -> BridgeState | None:
         data = await self._request("GET", "/api/logs", params={"limit": 50})
         best: BridgeState | None = None
@@ -145,4 +185,6 @@ class AldesBridgeClient:
         }
         data = await self._request("POST", "/api/send", json=body)
         if not isinstance(data, dict) or not data.get("ok"):
+            if _is_box_not_connected(data):
+                raise AldesBoxNotConnectedError(str(data)[:200])
             raise AldesBridgeResponseError(f"Comando rifiutato dal bridge: {data}")

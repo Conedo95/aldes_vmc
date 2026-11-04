@@ -25,12 +25,18 @@
         "data": {
           "scan_interval": "Update interval (s)",
           "boost_minutes": "Boost duration (minutes)",
-          "stale_minutes": "Data considered stale after (minutes)"
+          "stale_minutes": "Data considered stale after (minutes)",
+          "vacation_days": "Vacation days",
+          "filter_months": "Filter life (months)",
+          "kitchen_minutes": "Kitchen duration (minutes)"
         },
         "data_description": {
           "scan_interval": "The Box sends new data about every 10 minutes.",
-          "boost_minutes": "After that the VMC goes back to Daily.",
-          "stale_minutes": "After this time the connection sensor reports stale data."
+          "boost_minutes": "Boost = level 3 (default 60 minutes). After that the VMC goes back to Daily.",
+          "stale_minutes": "After this time the connection sensor reports stale data.",
+          "vacation_days": "Vacation has no timer: the end date is only a safety limit. To go back to Daily, choose Daily from the selector or from an automation.",
+          "filter_months": "Counted from the reset done on the machine display. Default: 9 months (270 days).",
+          "kitchen_minutes": "Kitchen = level 2. After that the VMC goes back to Daily."
         }
       }
     }
@@ -62,7 +68,7 @@
         "name": "Set speed"
       },
       "contatore_filtri": {
-        "name": "Filter counter"
+        "name": "Filter wear"
       },
       "indicatore_depressione": {
         "name": "Pressure drop indicator"
@@ -99,6 +105,12 @@
       },
       "voc": {
         "name": "VOC"
+      },
+      "giorni_filtri_rimanenti": {
+        "name": "Filter days remaining"
+      },
+      "fine_cucina": {
+        "name": "Kitchen end"
       }
     },
     "binary_sensor": {
@@ -120,7 +132,7 @@
   "services": {
     "send_command": {
       "name": "Send command",
-      "description": "Send an advanced command to the Box through the bridge (testing only). Do not use for Holiday.",
+      "description": "Send an advanced command to the Box through the bridge (testing only).",
       "fields": {
         "method": {
           "name": "method",
@@ -135,6 +147,17 @@
           "description": "Config entry ID (optional)."
         }
       }
+    }
+  },
+  "exceptions": {
+    "box_not_connected": {
+      "message": "The Box is not connected to the bridge: try again in a few minutes"
+    },
+    "bridge_unreachable": {
+      "message": "Cannot reach the bridge: check that the Aldes Bridge app is running"
+    },
+    "command_rejected": {
+      "message": "Command rejected by the bridge: {detail}"
     }
   }
 }

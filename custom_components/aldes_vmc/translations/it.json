@@ -25,12 +25,18 @@
         "data": {
           "scan_interval": "Intervallo di aggiornamento (s)",
           "boost_minutes": "Durata del Boost (minuti)",
-          "stale_minutes": "Dati obsoleti dopo (minuti)"
+          "stale_minutes": "Dati obsoleti dopo (minuti)",
+          "vacation_days": "Giorni di Vacanza",
+          "filter_months": "Durata filtri (mesi)",
+          "kitchen_minutes": "Durata di Cucina (minuti)"
         },
         "data_description": {
           "scan_interval": "La Box invia dati nuovi circa ogni 10 minuti.",
-          "boost_minutes": "Poi la VMC torna a Quotidiano.",
-          "stale_minutes": "Oltre questo tempo il sensore di connessione segnala dati obsoleti."
+          "boost_minutes": "Boost = livello 3 (predefinito 60 minuti). Poi la VMC torna a Quotidiano.",
+          "stale_minutes": "Oltre questo tempo il sensore di connessione segnala dati obsoleti.",
+          "vacation_days": "La Vacanza non ha un timer: la data di fine è solo di sicurezza. Per tornare a Quotidiano scegli Quotidiano dal selettore o da un'automazione.",
+          "filter_months": "Dal reset fatto sul display della macchina. Predefinito: 9 mesi (270 giorni).",
+          "kitchen_minutes": "Cucina = livello 2. Poi la VMC torna a Quotidiano."
         }
       }
     }
@@ -62,7 +68,7 @@
         "name": "Velocità impostata"
       },
       "contatore_filtri": {
-        "name": "Contatore filtri"
+        "name": "Usura filtri"
       },
       "indicatore_depressione": {
         "name": "Indicatore depressione"
@@ -99,6 +105,12 @@
       },
       "voc": {
         "name": "VOC"
+      },
+      "giorni_filtri_rimanenti": {
+        "name": "Giorni filtri rimanenti"
+      },
+      "fine_cucina": {
+        "name": "Fine Cucina"
       }
     },
     "binary_sensor": {
@@ -120,7 +132,7 @@
   "services": {
     "send_command": {
       "name": "Invia comando",
-      "description": "Invia un comando avanzato alla Box tramite il bridge (solo per prove). Non usare per Vacanza.",
+      "description": "Invia un comando avanzato alla Box tramite il bridge (solo per prove).",
       "fields": {
         "method": {
           "name": "method",
@@ -135,6 +147,17 @@
           "description": "ID della configurazione (facoltativo)."
         }
       }
+    }
+  },
+  "exceptions": {
+    "box_not_connected": {
+      "message": "La Box non è collegata al bridge: riprova tra qualche minuto"
+    },
+    "bridge_unreachable": {
+      "message": "Impossibile collegarsi al bridge: controlla che l'app Aldes Bridge sia attiva"
+    },
+    "command_rejected": {
+      "message": "Comando rifiutato dal bridge: {detail}"
     }
   }
 }

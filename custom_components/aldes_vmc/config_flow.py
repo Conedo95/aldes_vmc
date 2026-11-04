@@ -17,27 +17,40 @@ from .api import (
 )
 from .const import (
     CONF_BOOST_MINUTES,
+    CONF_FILTER_MONTHS,
+    CONF_KITCHEN_MINUTES,
     CONF_HOST,
     CONF_PORT,
     CONF_SCAN_INTERVAL,
     CONF_STALE_MINUTES,
+    CONF_VACATION_DAYS,
     DEFAULT_BOOST_MINUTES,
+    DEFAULT_FILTER_MONTHS,
+    DEFAULT_KITCHEN_MINUTES,
     DEFAULT_HOST,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_STALE_MINUTES,
+    DEFAULT_VACATION_DAYS,
     DOMAIN,
     MAX_BOOST_MINUTES,
+    MAX_FILTER_MONTHS,
+    MAX_KITCHEN_MINUTES,
     MAX_SCAN_INTERVAL,
+    MAX_VACATION_DAYS,
     MIN_BOOST_MINUTES,
+    MIN_FILTER_MONTHS,
+    MIN_KITCHEN_MINUTES,
     MIN_SCAN_INTERVAL,
+    MIN_VACATION_DAYS,
 )
 
 
 class AldesVmcConfigFlow(ConfigFlow, domain=DOMAIN):
     """Configurazione iniziale."""
 
-    VERSION = 1
+    VERSION = 2
+    MINOR_VERSION = 2
 
     @staticmethod
     @callback
@@ -87,7 +100,7 @@ class AldesVmcConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class AldesVmcOptionsFlow(OptionsFlow):
-    """Opzioni: intervallo, durata Boost, tolleranza dati obsoleti."""
+    """Opzioni: intervallo, durate Cucina e Boost, tolleranza dati obsoleti."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -106,10 +119,28 @@ class AldesVmcOptionsFlow(OptionsFlow):
                         int, vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL)
                     ),
                     vol.Required(
+                        CONF_KITCHEN_MINUTES,
+                        default=o.get(CONF_KITCHEN_MINUTES, DEFAULT_KITCHEN_MINUTES),
+                    ): vol.All(
+                        int, vol.Range(min=MIN_KITCHEN_MINUTES, max=MAX_KITCHEN_MINUTES)
+                    ),
+                    vol.Required(
                         CONF_BOOST_MINUTES,
                         default=o.get(CONF_BOOST_MINUTES, DEFAULT_BOOST_MINUTES),
                     ): vol.All(
                         int, vol.Range(min=MIN_BOOST_MINUTES, max=MAX_BOOST_MINUTES)
+                    ),
+                    vol.Required(
+                        CONF_VACATION_DAYS,
+                        default=o.get(CONF_VACATION_DAYS, DEFAULT_VACATION_DAYS),
+                    ): vol.All(
+                        int, vol.Range(min=MIN_VACATION_DAYS, max=MAX_VACATION_DAYS)
+                    ),
+                    vol.Required(
+                        CONF_FILTER_MONTHS,
+                        default=o.get(CONF_FILTER_MONTHS, DEFAULT_FILTER_MONTHS),
+                    ): vol.All(
+                        int, vol.Range(min=MIN_FILTER_MONTHS, max=MAX_FILTER_MONTHS)
                     ),
                     vol.Required(
                         CONF_STALE_MINUTES,

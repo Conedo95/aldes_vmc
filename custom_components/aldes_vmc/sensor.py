@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfVolumeFlowRate
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature, UnitOfTime, UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
@@ -73,8 +73,9 @@ SENSORS: tuple[AldesSensorDescription, ...] = (
         icon="mdi:fan-speed-1",
     ),
     AldesSensorDescription(
-        key="contatore_filtri",  # da verificare (giorni?)
+        key="contatore_filtri",  # ff_cpt = usura filtri in % (troncata)
         value_fn=_field("ff_cpt"),
+        native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:air-filter",
     ),
@@ -112,7 +113,9 @@ async def async_setup_entry(
 ) -> None:
     coordinator: AldesCoordinator = entry.runtime_data
     entities: list[SensorEntity] = [AldesSensor(coordinator, d) for d in SENSORS]
-    entities.append(AldesBoostEndSensor(coordinator))
+    entities.append(AldesLevelEndSensor(coordinator, "fine_cucina", coordinator.kitchen))
+    entities.append(AldesLevelEndSensor(coordinator, "fine_boost", coordinator.boost))
+    entities.append(AldesFilterDaysSensor(coordinator))
     async_add_entities(entities)
 
 
@@ -134,15 +137,44 @@ class AldesSensor(AldesEntity, SensorEntity):
         return None
 
 
-class AldesBoostEndSensor(AldesEntity, SensorEntity):
-    """Ora di fine del Boost (vuoto se non attivo)."""
+class AldesLevelEndSensor(AldesEntity, SensorEntity):
+    """Ora di fine di Cucina o Boost (vuoto se non attivo)."""
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:timer-outline"
 
-    def __init__(self, coordinator: AldesCoordinator) -> None:
-        super().__init__(coordinator, "fine_boost")
+    def __init__(self, coordinator: AldesCoordinator, key: str, timer) -> None:
+        super().__init__(coordinator, key)
+        self._timer = timer
 
     @property
     def native_value(self) -> datetime | None:
-        return self.coordinator.boost.end
+        return self._timer.end
+
+
+class AldesFilterDaysSensor(AldesEntity, SensorEntity):
+    """Giorni rimanenti prima del cambio dei filtri (dall'ultimo reset dal display)."""
+
+    _attr_native_unit_of_measurement = UnitOfTime.DAYS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:air-filter"
+
+    def __init__(self, coordinator: AldesCoordinator) -> None:
+        super().__init__(coordinator, "giorni_filtri_rimanenti")
+
+    @property
+    def native_value(self) -> int | None:
+        info = self.coordinator.filters.info()
+        return info.remaining_days if info else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        info = self.coordinator.filters.info()
+        if info is None:
+            return None
+        return {
+            "data_ultimo_reset": info.last_reset.isoformat(),
+            "giorni_trascorsi": info.elapsed_days,
+            "durata_giorni": info.duration_days,
+            "usura_calcolata_percentuale": info.wear_percent,
+        }
