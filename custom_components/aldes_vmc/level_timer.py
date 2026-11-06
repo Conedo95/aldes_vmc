@@ -1,22 +1,30 @@
-"""Timer di rientro (Cucina / Boost) che sopravvive al riavvio di Home Assistant."""
+"""Timer di rientro (Cucina / Boost) che sopravvive al riavvio di Home Assistant.
+
+Se alla scadenza la Box non e' collegata il rientro a Quotidiano non va perso: resta "in
+sospeso" (salvato su disco) e viene inviato appena la Box torna collegata, al massimo entro
+PENDING_RETURN_MAX_AGE (12 ore) dalla scadenza.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers.event import async_call_later, async_track_point_in_utc_time
+from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .api import AldesBridgeError
+from .api import AldesBoxNotConnectedError, AldesBridgeConnectionError, AldesBridgeError
 from .const import (
     BOOST_EXTERNAL_CHANGE_GRACE,
     DOMAIN,
     MODE_DAILY,
+    PENDING_RETURN_MAX_AGE,
+    PENDING_RETURN_MAX_REJECTS,
     STORAGE_VERSION,
 )
 
@@ -24,8 +32,6 @@ if TYPE_CHECKING:
     from .coordinator import AldesCoordinator, AldesData
 
 _LOGGER = logging.getLogger(__name__)
-RETRY_SECONDS = 60
-MAX_RETRIES = 5
 
 
 class LevelTimer:
@@ -55,17 +61,37 @@ class LevelTimer:
         )
         self.end: datetime | None = None
         self._started: float | None = None
+        # Rientro dovuto da questo istante ma non ancora inviato (Box scollegata)
+        self.pending_since: datetime | None = None
+        # Solo un messaggio della Box con timestamp successivo a questo istante (epoch) e' "nuovo":
+        # decide se inviare il rientro. E' il momento del tentativo fallito (Box scollegata).
+        self._pending_after: float | None = None
         self._unsub: CALLBACK_TYPE | None = None
-        self._retry_unsub: CALLBACK_TYPE | None = None
-        self._retries = 0
+        self._pending_task: asyncio.Task | None = None
+        self._finishing = False
+        self._rejects = 0
 
     @property
     def active(self) -> bool:
         return self.end is not None
 
+    @property
+    def pending(self) -> bool:
+        return self.pending_since is not None
+
     async def async_load(self) -> None:
-        """Ripristina il timer dopo un riavvio."""
+        """Ripristina il timer (o il rientro in sospeso) dopo un riavvio."""
         stored = await self._store.async_load() or {}
+        pending = dt_util.parse_datetime(stored.get("pending_since", "") or "")
+        if pending is not None:
+            self.pending_since = pending
+            after = stored.get("pending_after")
+            self._pending_after = float(after) if after is not None else pending.timestamp()
+            _LOGGER.info(
+                "%s: rientro a Quotidiano in sospeso dalle %s, riprovo appena la Box e' collegata",
+                self.name, pending,
+            )
+            return
         end = dt_util.parse_datetime(stored.get("end", "") or "")
         if end is None:
             return
@@ -81,20 +107,22 @@ class LevelTimer:
     async def _async_save(self) -> None:
         await self._store.async_save(
             {
+                "mode": self.code,
                 "end": self.end.isoformat() if self.end else None,
                 "started": self._started,
+                "pending_since": self.pending_since.isoformat() if self.pending_since else None,
+                "pending_after": self._pending_after if self.pending_since else None,
             }
         )
 
     def _schedule(self, end: datetime) -> None:
         if self._unsub:
             self._unsub()
-        self._unsub = async_track_point_in_utc_time(
-            self.hass, self._on_timer, end
-        )
+        self._unsub = async_track_point_in_utc_time(self.hass, self._on_timer, end)
 
     @callback
     def _on_timer(self, _now: datetime) -> None:
+        """Scadenza: gira nel loop di HA (callback marcata), quindi puo' pianificare il task."""
         self._unsub = None
         self.hass.async_create_task(self._async_finish())
 
@@ -103,60 +131,143 @@ class LevelTimer:
         minutes = self._entry.options.get(self._option_key, self._default_minutes)
         # Se l'invio fallisce l'eccezione sale e il timer non viene programmato
         await self._coordinator.async_send_mode(self.code)
-        self._cancel_retry()
+        self._cancel_pending_task()
+        self.pending_since = None
+        self._pending_after = None
+        self._rejects = 0
         self._started = dt_util.utcnow().timestamp()
         self.end = dt_util.utcnow() + timedelta(minutes=minutes)
         self._schedule(self.end)
+        await self._coordinator.restore.async_set_timer_end(self.end.timestamp())
         await self._async_save()
         self._coordinator.async_update_listeners()
 
     async def async_cancel(self) -> None:
-        """Annulla il timer senza inviare comandi."""
+        """Annulla il timer (e un eventuale rientro in sospeso) senza inviare comandi."""
         if self._unsub:
             self._unsub()
             self._unsub = None
-        self._cancel_retry()
-        if self.end is not None:
+        self._cancel_pending_task()
+        if self.end is not None or self.pending_since is not None:
             self.end = None
             self._started = None
+            self.pending_since = None
+            self._pending_after = None
+            self._rejects = 0
             await self._async_save()
             self._coordinator.async_update_listeners()
 
-    def _cancel_retry(self) -> None:
-        if self._retry_unsub:
-            self._retry_unsub()
-            self._retry_unsub = None
-        self._retries = 0
+    def _cancel_pending_task(self) -> None:
+        task = self._pending_task
+        if task is not None and not task.done() and task is not asyncio.current_task():
+            task.cancel()
+        self._pending_task = None
 
-    async def _async_finish(self) -> None:
-        """Fine del livello: torna a Quotidiano (con nuovi tentativi se l'invio fallisce)."""
-        try:
-            await self._coordinator.async_send_mode(MODE_DAILY)
-        except AldesBridgeError as err:
-            self._retries += 1
-            if self._retries > MAX_RETRIES:
-                _LOGGER.error("Impossibile tornare a Quotidiano dopo %s: %s", self.name, err)
-                self._retries = 0
-                self.end = None
-                await self._async_save()
-                self._coordinator.async_update_listeners()
-                return
-            _LOGGER.warning("Rientro a Quotidiano fallito (%s), riprovo", err)
-            self._retry_unsub = async_call_later(
-                self.hass,
-                RETRY_SECONDS,
-                lambda _n: self.hass.async_create_task(self._async_finish()),
+    async def _async_clear(self) -> None:
+        self.end = None
+        self._started = None
+        self.pending_since = None
+        self._pending_after = None
+        self._rejects = 0
+        await self._async_save()
+        self._coordinator.async_update_listeners()
+
+    async def _async_set_pending(self, err: Exception) -> None:
+        """Il rientro non e' stato inviato: lo ricordo (e lo salvo) per riprovare al ritorno della Box."""
+        now = dt_util.utcnow()
+        if self.pending_since is None:
+            # il limite di 12 ore parte dalla scadenza, non dal primo tentativo fallito
+            self.pending_since = min(self.end, now) if self.end else now
+            self._pending_after = now.timestamp()
+            _LOGGER.warning(
+                "%s: rientro a Quotidiano non inviato (%s). Resta in sospeso (massimo 12 ore) "
+                "e verra' inviato appena la Box e' collegata",
+                self.name, err,
             )
-            return
-        self._cancel_retry()
+        else:
+            _LOGGER.debug("%s: rientro ancora in sospeso (%s)", self.name, err)
         self.end = None
         self._started = None
         await self._async_save()
         self._coordinator.async_update_listeners()
 
+    async def _async_finish(self) -> None:
+        """Fine del livello: torna a Quotidiano; se non si puo', il rientro resta in sospeso."""
+        if self._finishing:
+            return
+        self._finishing = True
+        try:
+            try:
+                await self._coordinator.async_send_mode(MODE_DAILY)
+            except (AldesBoxNotConnectedError, AldesBridgeConnectionError) as err:
+                await self._async_set_pending(err)
+                return
+            except AldesBridgeError as err:
+                # comando rifiutato dal bridge per un altro motivo: poche altre prove, poi rinuncio
+                self._rejects += 1
+                if self._rejects >= PENDING_RETURN_MAX_REJECTS:
+                    _LOGGER.error(
+                        "%s: impossibile tornare a Quotidiano (%s), rinuncio dopo %s tentativi",
+                        self.name, err, self._rejects,
+                    )
+                    await self._async_clear()
+                else:
+                    await self._async_set_pending(err)
+                return
+            was_pending = self.pending_since is not None
+            await self._async_clear()
+            if was_pending:
+                _LOGGER.info("%s: rientro a Quotidiano in sospeso inviato", self.name)
+        finally:
+            self._finishing = False
+
+    async def _async_handle_pending(self, data: AldesData) -> None:
+        """Rientro in sospeso: lo invia quando la Box e' collegata (entro 12 ore)."""
+        assert self.pending_since is not None
+        age = (dt_util.utcnow() - self.pending_since).total_seconds()
+        if age > PENDING_RETURN_MAX_AGE:
+            _LOGGER.warning(
+                "%s: rientro a Quotidiano in sospeso da oltre 12 ore, annullato senza inviare",
+                self.name,
+            )
+            await self._async_clear()
+            return
+        if not (data.box_connected and data.mqtt_connected):
+            return
+        after = self._pending_after if self._pending_after is not None else self.pending_since.timestamp()
+        if data.mode_code is None or data.data_ts <= after:
+            # Box ricollegata ma nessun messaggio NUOVO: il dato in memoria e' quello di prima
+            # del silenzio, non dice cosa sta facendo ora la VMC. Aspetto il prossimo.
+            _LOGGER.debug("%s: Box collegata, attendo un messaggio nuovo prima di decidere", self.name)
+            return
+        if not self._coordinator.restore.gate_open():
+            _LOGGER.debug("%s: ripristino dopo riconnessione in attesa di messaggi consecutivi", self.name)
+            return
+        if data.mode_code not in (MODE_DAILY, self.code):
+            _LOGGER.info(
+                "%s: nel dato nuovo la Box e' in un'altra modalita' (%s, non %s ne' Quotidiano): "
+                "rientro in sospeso annullato, non invio nulla",
+                self.name, data.mode_code, self.code,
+            )
+            await self._async_clear()
+            return
+        if self._finishing or (self._pending_task and not self._pending_task.done()):
+            return
+        _LOGGER.info(
+            "%s: dato nuovo, la Box dichiara %s: invio il rientro a Quotidiano in sospeso (anche se dichiara gia' Quotidiano: sblocco)",
+            self.name, data.mode_code,
+        )
+        # In background: l'invio rispetta la pausa di 30 s e non deve bloccare l'aggiornamento dati
+        self._pending_task = self._entry.async_create_background_task(
+            self.hass, self._async_finish(), f"aldes_vmc rientro in sospeso {self.name}"
+        )
+
     async def async_data_updated(self, data: AldesData) -> None:
-        """Se un dato recente mostra un'altra modalita', il livello e' stato cambiato altrove."""
-        if not self.active or self._started is None or self._retry_unsub:
+        """Rientro in sospeso da inviare, oppure livello cambiato altrove (timer da annullare)."""
+        if self.pending_since is not None:
+            await self._async_handle_pending(data)
+            return
+        if not self.active or self._started is None:
             return
         if self._coordinator.pending_code is not None:
             return  # comando in attesa di conferma (o nuovo invio in corso)
@@ -176,4 +287,4 @@ class LevelTimer:
         if self._unsub:
             self._unsub()
             self._unsub = None
-        self._cancel_retry()
+        self._cancel_pending_task()

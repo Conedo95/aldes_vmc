@@ -78,15 +78,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: AldesConfigEntry) -> boo
         async_get_clientsession(hass), entry.data[CONF_HOST], entry.data[CONF_PORT]
     )
     coordinator = AldesCoordinator(hass, entry, client, entry.unique_id or "")
-    await coordinator.filters.async_load()
-    await coordinator.async_config_entry_first_refresh()
-    for timer in coordinator.timers:
-        await timer.async_load()
-    entry.runtime_data = coordinator
+    try:
+        await coordinator.filters.async_load()
+        await coordinator.restore.async_load()
+        await coordinator.async_config_entry_first_refresh()
+        for timer in coordinator.timers:
+            await timer.async_load()
+        entry.runtime_data = coordinator
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except BaseException:
+        # Se l'avvio fallisce (per esempio il bridge non e' ancora pronto: ConfigEntryNotReady) Home Assistant
+        # NON chiama async_unload_entry: i timer gia' avviati vanno fermati qui, altrimenti dopo 15 minuti il
+        # vecchio monitor apre una Riparazione "Box scollegata" falsa (visto il 05/11/2026 alle 19:05).
+        _async_cleanup(coordinator)
+        raise
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True
+
+
+def _async_cleanup(coordinator: AldesCoordinator) -> None:
+    """Ferma timer e attivita' in background di un coordinatore che non e' stato caricato."""
+    coordinator.monitor.async_unload()
+    coordinator.restore.async_unload()
+    coordinator.async_shutdown_followups()
+    for timer in coordinator.timers:
+        timer.async_unload()
 
 
 def _async_rename_end_sensor(hass: HomeAssistant, entry: AldesConfigEntry) -> None:
@@ -145,13 +162,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: AldesConfigEntry) -> bo
         for timer in entry.runtime_data.timers:
             timer.async_unload()
         entry.runtime_data.async_shutdown_followups()
+        entry.runtime_data.monitor.async_unload()
+        entry.runtime_data.restore.async_unload()
     return ok
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: AldesConfigEntry) -> None:
-    """Cancella i file salvati (timer e filtri)."""
+    """Cancella i file salvati (timer e filtri) e la Riparazione."""
+    from homeassistant.helpers import issue_registry as ir
     from homeassistant.helpers.storage import Store
 
+    ir.async_delete_issue(hass, DOMAIN, f"box_offline_{entry.entry_id}")
+    ir.async_delete_issue(hass, DOMAIN, f"restore_failed_{entry.entry_id}")
+    await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.goal").async_remove()
     await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}").async_remove()
     await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.boost").async_remove()
     await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.filters").async_remove()

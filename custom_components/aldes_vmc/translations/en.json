@@ -28,7 +28,9 @@
           "stale_minutes": "Data considered stale after (minutes)",
           "vacation_days": "Vacation days",
           "filter_months": "Filter life (months)",
-          "kitchen_minutes": "Kitchen duration (minutes)"
+          "kitchen_minutes": "Kitchen duration (minutes)",
+          "box_offline_minutes": "Box considered offline after (minutes)",
+          "restore_after_reconnect": "Restore the mode after a reconnection"
         },
         "data_description": {
           "scan_interval": "The Box sends new data about every 10 minutes.",
@@ -36,7 +38,9 @@
           "stale_minutes": "After this time the connection sensor reports stale data.",
           "vacation_days": "Vacation has no timer: the end date is only a safety limit. To go back to Daily, choose Daily from the selector or from an automation.",
           "filter_months": "Counted from the reset done on the machine display. Default: 9 months (270 days).",
-          "kitchen_minutes": "Kitchen = level 2. After that the VMC goes back to Daily."
+          "kitchen_minutes": "Kitchen = level 2. After that the VMC goes back to Daily.",
+          "box_offline_minutes": "After this time without a Box connection a Repair is created (5–120). It disappears by itself when the Box is back.",
+          "restore_after_reconnect": "After a Box absence of at least 'Box considered offline after' minutes (or after a command refused because the Box was offline), waits for 2 consecutive Box messages and sends ONE command with the wanted mode (even if the Box already reports that mode: it acts as an unlock). Kitchen/Boost still valid are left alone."
         }
       }
     }
@@ -158,6 +162,16 @@
     },
     "command_rejected": {
       "message": "Command rejected by the bridge: {detail}"
+    }
+  },
+  "issues": {
+    "box_offline": {
+      "title": "AldesConnect Box disconnected",
+      "description": "The AldesConnect Box has not been connected to the Aldes Bridge ({bridge}) for more than {minutes} minutes (since {since}), or it sends no messages.\n\nUntil it is back, the VMC data are **not updated** (`dati_non_aggiornati` attribute) and commands are refused; Daily and Holiday are remembered and delivered when the Box returns.\n\n**What to do (after a blackout or if the Box does not reconnect by itself):**\n1. Cut power to the VMC at the circuit breaker for 15-20 seconds.\n2. Restore power and wait about 5 minutes: the Box reconnects by itself.\n3. If it is not back after 10 minutes, check that the Aldes Bridge app is running and that the Box DNS name points to Home Assistant.\n\nWhen it is back the integration waits for 2 consecutive Box messages (about 10-20 minutes) before sending, if needed, a restore command. This notice disappears by itself when the Box is connected again."
+    },
+    "restore_failed": {
+      "title": "Mode restore failed",
+      "description": "After the Box returned, the integration sent the restore command ({mode}) but could not complete it: {detail}.\n\nNo further attempts are made. Check the real mode on the VMC display and, if needed, choose the mode from the selector. Note: the Box confirmation only covers the reported mode, not the physical effect on the fans: if the VMC does not respond, cut power at the circuit breaker for 15-20 seconds and switch it back on."
     }
   }
 }

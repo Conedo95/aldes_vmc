@@ -128,13 +128,22 @@ class AldesSensor(AldesEntity, SensorEntity):
 
     @property
     def native_value(self) -> Any:
+        # La modalita' non confermata non si presenta come reale (vedi ultima_modalita_nota)
+        if self.entity_description.key == "modalita_attuale" and self.dati_non_aggiornati:
+            return None
         return self.entity_description.value_fn(self.coordinator.data)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
+        attrs: dict[str, Any] = {"dati_non_aggiornati": self.dati_non_aggiornati}
         if self.entity_description.key == "modalita_attuale":
-            return {"codice": self.coordinator.data.mode_code}
-        return None
+            d = self.coordinator.data
+            attrs["codice"] = None if self.dati_non_aggiornati else d.mode_code
+            if self.dati_non_aggiornati:
+                attrs["ultima_modalita_nota"] = (
+                    MODE_NAMES.get(d.mode_code, d.mode_code) if d.mode_code else None
+                )
+        return attrs
 
 
 class AldesLevelEndSensor(AldesEntity, SensorEntity):
@@ -150,6 +159,11 @@ class AldesLevelEndSensor(AldesEntity, SensorEntity):
     @property
     def native_value(self) -> datetime | None:
         return self._timer.end
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        since = self._timer.pending_since
+        return {"rientro_in_sospeso_dal": since.isoformat() if since else None}
 
 
 class AldesFilterDaysSensor(AldesEntity, SensorEntity):

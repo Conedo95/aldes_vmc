@@ -28,7 +28,9 @@
           "stale_minutes": "Dati obsoleti dopo (minuti)",
           "vacation_days": "Giorni di Vacanza",
           "filter_months": "Durata filtri (mesi)",
-          "kitchen_minutes": "Durata di Cucina (minuti)"
+          "kitchen_minutes": "Durata di Cucina (minuti)",
+          "box_offline_minutes": "Box considerata scollegata dopo (minuti)",
+          "restore_after_reconnect": "Ripristina la modalità dopo una riconnessione"
         },
         "data_description": {
           "scan_interval": "La Box invia dati nuovi circa ogni 10 minuti.",
@@ -36,7 +38,9 @@
           "stale_minutes": "Oltre questo tempo il sensore di connessione segnala dati obsoleti.",
           "vacation_days": "La Vacanza non ha un timer: la data di fine è solo di sicurezza. Per tornare a Quotidiano scegli Quotidiano dal selettore o da un'automazione.",
           "filter_months": "Dal reset fatto sul display della macchina. Predefinito: 9 mesi (270 giorni).",
-          "kitchen_minutes": "Cucina = livello 2. Poi la VMC torna a Quotidiano."
+          "kitchen_minutes": "Cucina = livello 2. Poi la VMC torna a Quotidiano.",
+          "box_offline_minutes": "Dopo questo tempo senza connessione della Box viene creata una Riparazione (5–120). Sparisce da sola quando la Box torna collegata.",
+          "restore_after_reconnect": "Dopo un'assenza della Box di almeno 'Box considerata scollegata dopo' minuti (o dopo un comando rifiutato perché la Box era scollegata), attende 2 messaggi consecutivi e invia UN comando con la modalità voluta (anche se la Box dichiara già quella modalità: serve da sblocco). Cucina/Boost ancora validi non vengono toccati."
         }
       }
     }
@@ -158,6 +162,16 @@
     },
     "command_rejected": {
       "message": "Comando rifiutato dal bridge: {detail}"
+    }
+  },
+  "issues": {
+    "box_offline": {
+      "title": "Box AldesConnect scollegata",
+      "description": "La Box AldesConnect non è collegata all'Aldes Bridge ({bridge}) da oltre {minutes} minuti (dalle {since}), oppure non manda messaggi.\n\nFinché non torna, i dati della VMC **non sono aggiornati** (attributo `dati_non_aggiornati`) e i comandi vengono rifiutati: Quotidiano e Vacanza restano però memorizzati e vengono consegnati al ritorno della Box.\n\n**Cosa fare (dopo un blackout o se la Box non si ricollega da sola):**\n1. Togli corrente alla VMC dal magnetotermico per 15-20 secondi.\n2. Ridai corrente e attendi circa 5 minuti: la Box si ricollega da sola.\n3. Se dopo 10 minuti non è tornata, controlla che l'app Aldes Bridge sia in esecuzione e che il nome DNS della Box punti a Home Assistant.\n\nAl ritorno l'integrazione attende 2 messaggi consecutivi della Box (circa 10-20 minuti) prima di inviare, se serve, un comando di ripristino. Questo avviso sparisce da solo quando la Box torna collegata."
+    },
+    "restore_failed": {
+      "title": "Ripristino della modalità non riuscito",
+      "description": "Dopo il ritorno della Box l'integrazione ha inviato il comando di ripristino ({mode}) ma non è riuscita a completarlo: {detail}.\n\nNon vengono fatti altri tentativi. Controlla sul display della VMC la modalità reale e, se serve, scegli la modalità dal selettore. Nota: la conferma della Box riguarda solo la modalità dichiarata, non l'effetto fisico sui ventilatori: se la VMC non risponde, togli corrente dal magnetotermico per 15-20 secondi e riaccendi."
     }
   }
 }

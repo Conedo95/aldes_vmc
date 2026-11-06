@@ -32,6 +32,10 @@ class AldesBoxNotConnectedError(AldesBridgeResponseError):
     """Il bridge rifiuta il comando perche' la Box non e' collegata (non viene messo in coda)."""
 
 
+class CommandSuperseded(Exception):
+    """Un comando automatico e' stato scavalcato da uno piu' recente mentre aspettava la pausa minima."""
+
+
 def _is_box_not_connected(text: Any) -> bool:
     return "aucune box" in str(text).lower()
 

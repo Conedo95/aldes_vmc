@@ -20,6 +20,15 @@ class AldesEntity(CoordinatorEntity[AldesCoordinator]):
         self._attr_unique_id = f"{coordinator.client_id}_{key}"
 
     @property
+    def available(self) -> bool:
+        return self.coordinator.entities_available
+
+    @property
+    def dati_non_aggiornati(self) -> bool:
+        """True se la Box e' scollegata o l'ultimo dato e' piu' vecchio della tolleranza."""
+        return self.coordinator.data_not_current
+
+    @property
     def device_info(self) -> DeviceInfo:
         payload = self.coordinator.data.payload if self.coordinator.data else {}
         return DeviceInfo(
